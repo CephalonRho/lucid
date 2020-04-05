@@ -1,4 +1,4 @@
-use lucid::kvstore::KvStore;
+use lucid::kvstore::MemoryStore;
 
 const CIPHER: std::option::Option<[&str; 2]> = Some([
     "123456789012345678901234123456789012345678901234",
@@ -9,8 +9,8 @@ const DATA: [u8; 512] = [42u8; 512];
 
 const KEY: &str = "test_value";
 
-fn init_kv() -> KvStore {
-    let kv = KvStore::new(CIPHER);
+fn init_kv() -> MemoryStore {
+    let kv = MemoryStore::new(CIPHER);
     kv.set(KEY.to_string(), DATA.to_vec());
     kv
 }

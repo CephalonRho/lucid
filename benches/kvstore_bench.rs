@@ -1,6 +1,6 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 
-use lucid::kvstore::KvStore;
+use lucid::kvstore::MemoryStore;
 
 const CIPHER: std::option::Option<[&str; 2]> = Some([
     "123456789012345678901234123456789012345678901234",
@@ -10,14 +10,14 @@ const CIPHER: std::option::Option<[&str; 2]> = Some([
 const DATA: [u8; 1000] = [42u8; 1000];
 
 fn set_1_kb_data(c: &mut Criterion) {
-    let kv = KvStore::new(CIPHER);
+    let kv = MemoryStore::new(CIPHER);
 
     c.bench_function("Set 1KB", |b| {
         b.iter(|| kv.set("bench_one".to_string(), DATA.to_vec()))
     });
 }
 fn get_1_kb_data(c: &mut Criterion) {
-    let kv = KvStore::new(CIPHER);
+    let kv = MemoryStore::new(CIPHER);
 
     let k = String::from("bench_one");
     kv.set(k.clone(), DATA.to_vec());
@@ -26,14 +26,14 @@ fn get_1_kb_data(c: &mut Criterion) {
 }
 
 fn set_1_kb_data_without_encryption(c: &mut Criterion) {
-    let kv = KvStore::new(None);
+    let kv = MemoryStore::new(None);
 
     c.bench_function("Set 1KB (w/o encrytion)", |b| {
         b.iter(|| kv.set("bench_one".to_string(), DATA.to_vec()))
     });
 }
 fn get_1_kb_data_without_encryption(c: &mut Criterion) {
-    let kv = KvStore::new(None);
+    let kv = MemoryStore::new(None);
 
     let k = String::from("bench_one");
     kv.set(k.clone(), DATA.to_vec());

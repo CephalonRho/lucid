@@ -1,24 +1,14 @@
 use block_modes::block_padding::ZeroPadding;
 use block_modes::{BlockMode, Cbc};
 use chashmap::CHashMap;
-use chrono::{DateTime, Utc};
-
+use chrono::Utc;
 use serpent::Serpent;
+
+use super::KvElement;
 
 type SerpentCbc = Cbc<Serpent, ZeroPadding>;
 
-#[derive(Debug, Clone)]
-pub struct KvElement {
-    pub data: Vec<u8>,
-    pub mime_type: String,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub expire_at: DateTime<Utc>,
-    pub update_count: i32,
-    pub locked: bool,
-}
-
-pub struct KvStore {
+pub struct MemoryStore {
     container: CHashMap<String, KvElement>,
     cipher: Option<Cipher>,
 }
@@ -28,10 +18,10 @@ pub struct Cipher {
     iv: [u8; 16],
 }
 
-impl KvStore {
-    pub fn new(cipher: Option<[&str; 2]>) -> KvStore {
+impl MemoryStore {
+    pub fn new(cipher: Option<[&str; 2]>) -> Self {
         // TODO: prepare looped persistence
-        let mut kv = KvStore {
+        let mut kv = Self {
             container: CHashMap::new(),
             cipher: None,
         };

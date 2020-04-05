@@ -16,7 +16,7 @@ use warp::{
 use warp::{sse::ServerSentEvent, Filter};
 
 use crate::configuration::{Claims, Configuration};
-use crate::kvstore::KvStore;
+use crate::kvstore::MemoryStore;
 
 #[derive(Debug, Clone)]
 pub struct SseMessage {
@@ -54,7 +54,7 @@ impl Server {
                 ]);
             }
         }
-        let store = Arc::new(KvStore::new(encryption_key));
+        let store = Arc::new(MemoryStore::new(encryption_key));
         let event_tx = Arc::new(broadcast::channel(512).0);
 
         let instance = warp::serve(routes_filter(store, event_tx, self.configuration.clone()));
@@ -110,7 +110,7 @@ impl Server {
 }
 
 pub fn routes_filter(
-    store: Arc<KvStore>,
+    store: Arc<MemoryStore>,
     event_tx: Arc<broadcast::Sender<SseMessage>>,
     config: Arc<RwLock<Configuration>>,
 ) -> impl Filter<Extract = (impl Reply,)> + Clone + Send + Sync + 'static {
@@ -208,7 +208,7 @@ pub fn routes_filter(
         .with(warp::log("lucid::server"))
 }
 
-async fn get_key(store: Arc<KvStore>, key: String) -> Result<impl Reply, Rejection> {
+async fn get_key(store: Arc<MemoryStore>, key: String) -> Result<impl Reply, Rejection> {
     if let Some(value) = store.get(key) {
         Ok(Response::builder()
             .header("Content-Type", value.mime_type)
@@ -219,7 +219,7 @@ async fn get_key(store: Arc<KvStore>, key: String) -> Result<impl Reply, Rejecti
 }
 
 async fn put_key(
-    store: Arc<KvStore>,
+    store: Arc<MemoryStore>,
     event_tx: Arc<broadcast::Sender<SseMessage>>,
     config: Arc<RwLock<Configuration>>,
     key: String,
@@ -251,7 +251,7 @@ async fn put_key(
     }
 }
 
-async fn delete_key(store: Arc<KvStore>, key: String) -> Result<impl Reply, Rejection> {
+async fn delete_key(store: Arc<MemoryStore>, key: String) -> Result<impl Reply, Rejection> {
     if let Some(_) = store.get(key.clone()) {
         (*store).drop(key);
         Ok(warp::reply::json(&JsonMessage {
@@ -262,7 +262,7 @@ async fn delete_key(store: Arc<KvStore>, key: String) -> Result<impl Reply, Reje
     }
 }
 
-async fn find_key(store: Arc<KvStore>, key: String) -> Result<impl Reply, Rejection> {
+async fn find_key(store: Arc<MemoryStore>, key: String) -> Result<impl Reply, Rejection> {
     if let Some(value) = store.get(key) {
         Ok(Response::builder()
             .header("Content-Type", value.mime_type)
@@ -277,7 +277,7 @@ struct PatchValue {
     operation: String,
 }
 async fn patch_key(
-    store: Arc<KvStore>,
+    store: Arc<MemoryStore>,
     key: String,
     patch_value: PatchValue,
 ) -> Result<impl Reply, Rejection> {

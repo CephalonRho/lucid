@@ -7,12 +7,12 @@ use warp::{Filter, Reply};
 
 use lucid::{
     configuration::{Configuration, ServerSentEvent},
-    kvstore::KvStore,
+    kvstore::MemoryStore,
     server::routes_filter,
 };
 
 fn create_routes_filter() -> impl Filter<Extract = (impl Reply,)> + Clone + Send + Sync + 'static {
-    let store = Arc::new(KvStore::new(None));
+    let store = Arc::new(MemoryStore::new(None));
     let event_tx = Arc::new(broadcast::channel(512).0);
     let config = Arc::new(RwLock::new(Configuration {
         sse: ServerSentEvent { enabled: true },
