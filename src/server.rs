@@ -16,7 +16,7 @@ use warp::{
 use warp::{sse::ServerSentEvent, Filter};
 
 use crate::configuration::{Claims, Configuration};
-use crate::kvstore::MemoryStore;
+use crate::kvstore::{Encryption, MemoryStore};
 
 #[derive(Debug, Clone)]
 pub struct SseMessage {
@@ -41,21 +41,22 @@ impl Server {
     pub async fn run(&self) {
         let configuration = self.configuration.read().unwrap();
 
-        let mut encryption_key = None;
-        if configuration.encryption.enabled {
+        let encryption = if configuration.encryption.enabled {
             if configuration.encryption.private_key.is_empty() {
                 panic!("The private key must be filled.");
-            } else if configuration.encryption.iv.is_empty() {
-                panic!("The initialization vector must be filled.")
             } else {
-                encryption_key = Some([
-                    configuration.encryption.private_key.as_str(),
-                    configuration.encryption.iv.as_str(),
-                ]);
+                Some(Encryption::serpent(
+                    hex::decode(configuration.encryption.private_key.as_str()).unwrap(),
+                ))
             }
-        }
+        } else {
+            None
+        };
+
         let store = Arc::new(MemoryStore::new(encryption_key));
         let event_tx = Arc::new(broadcast::channel(512).0);
+
+        let store = Arc::new(MemoryStore::new(encryption));
 
         let instance = warp::serve(routes_filter(store, event_tx, self.configuration.clone()));
         if configuration.general.use_ssl {

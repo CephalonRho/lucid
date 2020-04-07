@@ -99,7 +99,6 @@ impl Default for Persistence {
 pub struct Encryption {
     pub enabled: bool,
     pub private_key: String,
-    pub iv: String,
 }
 
 impl Default for Encryption {
@@ -107,7 +106,6 @@ impl Default for Encryption {
         Self {
             enabled: false,
             private_key: hex::encode(rand::thread_rng().gen::<[u8; 24]>()),
-            iv: hex::encode(rand::thread_rng().gen::<[u8; 16]>()),
         }
     }
 }

@@ -1,16 +1,13 @@
-use lucid::kvstore::MemoryStore;
+use lucid::kvstore::{Encryption, MemoryStore};
 
-const CIPHER: std::option::Option<[&str; 2]> = Some([
-    "123456789012345678901234123456789012345678901234",
-    "f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff",
-]);
+const CIPHER: &str = "123456789012345678901234123456789012345678901234";
 
 const DATA: [u8; 512] = [42u8; 512];
 
 const KEY: &str = "test_value";
 
 fn init_kv() -> MemoryStore {
-    let kv = MemoryStore::new(CIPHER);
+    let kv = MemoryStore::new(Some(Encryption::serpent(hex::decode(CIPHER).unwrap())));
     kv.set(KEY.to_string(), DATA.to_vec());
     kv
 }

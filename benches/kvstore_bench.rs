@@ -1,23 +1,20 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 
-use lucid::kvstore::MemoryStore;
+use lucid::kvstore::{Encryption, MemoryStore};
 
-const CIPHER: std::option::Option<[&str; 2]> = Some([
-    "123456789012345678901234123456789012345678901234",
-    "f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff",
-]);
+const CIPHER: &str = "123456789012345678901234123456789012345678901234";
 
 const DATA: [u8; 1000] = [42u8; 1000];
 
 fn set_1_kb_data(c: &mut Criterion) {
-    let kv = MemoryStore::new(CIPHER);
+    let kv = MemoryStore::new(Some(Encryption::serpent(hex::decode(CIPHER).unwrap())));
 
     c.bench_function("Set 1KB", |b| {
         b.iter(|| kv.set("bench_one".to_string(), DATA.to_vec()))
     });
 }
 fn get_1_kb_data(c: &mut Criterion) {
-    let kv = MemoryStore::new(CIPHER);
+    let kv = MemoryStore::new(Some(Encryption::serpent(hex::decode(CIPHER).unwrap())));
 
     let k = String::from("bench_one");
     kv.set(k.clone(), DATA.to_vec());

@@ -1,47 +1,29 @@
-use block_modes::block_padding::ZeroPadding;
-use block_modes::{BlockMode, Cbc};
 use chashmap::CHashMap;
 use chrono::Utc;
-use serpent::Serpent;
 
-use super::KvElement;
-
-type SerpentCbc = Cbc<Serpent, ZeroPadding>;
+use super::{Encryption, KvElement};
 
 pub struct MemoryStore {
     container: CHashMap<String, KvElement>,
-    cipher: Option<Cipher>,
-}
-
-pub struct Cipher {
-    priv_key: [u8; 24],
-    iv: [u8; 16],
+    encryption: Option<Encryption>,
 }
 
 impl MemoryStore {
-    pub fn new(cipher: Option<[&str; 2]>) -> Self {
-        // TODO: prepare looped persistence
-        let mut kv = Self {
+    pub fn new(encryption: Option<Encryption>) -> Self {
+        Self {
             container: CHashMap::new(),
-            cipher: None,
-        };
-
-        if let Some(c) = cipher {
-            let (mut priv_key, mut iv) = ([0u8; 24], [0u8; 16]);
-            priv_key[..24].copy_from_slice(&hex::decode(c[0]).unwrap());
-            iv[..16].copy_from_slice(&hex::decode(c[1]).unwrap());
-            kv.cipher = Some(Cipher { priv_key, iv });
+            encryption,
         }
-
-        kv
     }
 
     pub fn set(&self, key: String, mut value: Vec<u8>) -> Option<KvElement> {
-        // TODO: prepare iterative persistence
-        if let Some(c) = &self.cipher {
-            let cipher = SerpentCbc::new_var(&c.priv_key, &c.iv).unwrap();
-            value = cipher.encrypt_vec(&value);
-        }
+        let iv = if let Some(encryption) = &self.encryption {
+            let iv = rand::random::<[u8; 16]>();
+            value = encryption.encrypt_vec(&value, &iv).unwrap();
+            Some(iv)
+        } else {
+            None
+        };
         match &mut self.container.get_mut(&key) {
             Some(kv_element) => {
                 if !kv_element.locked {
@@ -63,6 +45,7 @@ impl MemoryStore {
                     expire_at: Utc::now(),
                     update_count: 1,
                     locked: false,
+                    iv: iv.map(|x| x.to_vec()),
                 };
                 self.container.insert(key, kv_element)
             }
@@ -74,9 +57,12 @@ impl MemoryStore {
             Some(value) => {
                 let mut cloned_value = value.clone();
 
-                if let Some(c) = &self.cipher {
-                    let cipher = SerpentCbc::new_var(&c.priv_key, &c.iv).unwrap();
-                    cloned_value.data = cipher.decrypt_vec(&value.data).unwrap();
+                if let Some(encryption) = &self.encryption {
+                    let iv = value
+                        .iv
+                        .as_ref()
+                        .expect("encryption is enabled but element doesn't have IV");
+                    cloned_value.data = encryption.decrypt_vec(&value.data, iv).unwrap();
                 }
                 Some(cloned_value)
             }
