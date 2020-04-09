@@ -1,4 +1,4 @@
-use lucid::kvstore::{Encryption, MemoryStore};
+use lucid::kvstore::{Encryption, MemoryStore, Store};
 
 const CIPHER: &str = "123456789012345678901234123456789012345678901234";
 
@@ -6,9 +6,9 @@ const DATA: [u8; 512] = [42u8; 512];
 
 const KEY: &str = "test_value";
 
-fn init_kv() -> MemoryStore {
+async fn init_kv() -> MemoryStore {
     let kv = MemoryStore::new(Some(Encryption::serpent(hex::decode(CIPHER).unwrap())));
-    kv.set(KEY.to_string(), DATA.to_vec());
+    kv.set(KEY.to_string(), DATA.to_vec()).await;
     kv
 }
 
@@ -16,10 +16,10 @@ fn init_kv() -> MemoryStore {
 mod tests {
     use super::*;
 
-    #[test]
-    fn get_returns_a_value() {
-        let kv = init_kv();
-        let value = kv.get(KEY.to_string());
+    #[tokio::test]
+    async fn get_returns_a_value() {
+        let kv = init_kv().await;
+        let value = kv.get(KEY.to_string()).await;
 
         match value {
             Some(v) => assert_eq!(v.data, DATA.to_vec()),

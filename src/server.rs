@@ -16,7 +16,7 @@ use warp::{
 use warp::{sse::ServerSentEvent, Filter};
 
 use crate::configuration::{Claims, Configuration};
-use crate::kvstore::{Encryption, MemoryStore, Store};
+use crate::kvstore::Store;
 
 #[derive(Debug, Clone)]
 pub struct SseMessage {
@@ -29,34 +29,32 @@ struct JsonMessage {
     message: String,
 }
 
-pub struct Server {
+pub struct Server<S> {
     configuration: Arc<RwLock<Configuration>>,
+    store: Arc<S>,
 }
 
-impl Server {
-    pub fn new(configuration: Arc<RwLock<Configuration>>) -> Server {
-        Server { configuration }
+impl<S> Server<S>
+where
+    S: Store + Send + Sync + 'static,
+{
+    pub fn new(configuration: Arc<RwLock<Configuration>>, store: Arc<S>) -> Self {
+        Server {
+            configuration,
+            store,
+        }
     }
 
     pub async fn run(&self) {
         let configuration = self.configuration.read().unwrap();
 
-        let encryption = if configuration.encryption.enabled {
-            if configuration.encryption.private_key.is_empty() {
-                panic!("The private key must be filled.");
-            } else {
-                Some(Encryption::serpent(
-                    hex::decode(configuration.encryption.private_key.as_str()).unwrap(),
-                ))
-            }
-        } else {
-            None
-        };
-
-        let store = Arc::new(MemoryStore::new(encryption));
         let event_tx = Arc::new(broadcast::channel(512).0);
 
-        let instance = warp::serve(routes_filter(store, event_tx, self.configuration.clone()));
+        let instance = warp::serve(routes_filter(
+            self.store.clone(),
+            event_tx,
+            self.configuration.clone(),
+        ));
         if configuration.general.use_ssl {
             let bind_endpoint = SocketAddr::from((
                 configuration.general.bind_address,
@@ -109,7 +107,7 @@ impl Server {
 }
 
 pub fn routes_filter(
-    store: Arc<MemoryStore>,
+    store: Arc<impl Store + Send + Sync + 'static>,
     event_tx: Arc<broadcast::Sender<SseMessage>>,
     config: Arc<RwLock<Configuration>>,
 ) -> impl Filter<Extract = (impl Reply,)> + Clone + Send + Sync + 'static {
@@ -207,7 +205,7 @@ pub fn routes_filter(
         .with(warp::log("lucid::server"))
 }
 
-async fn get_key(store: Arc<MemoryStore>, key: String) -> Result<impl Reply, Rejection> {
+async fn get_key(store: Arc<impl Store>, key: String) -> Result<impl Reply, Rejection> {
     if let Some(value) = store.get(key).await {
         Ok(Response::builder()
             .header("Content-Type", value.mime_type)
@@ -218,7 +216,7 @@ async fn get_key(store: Arc<MemoryStore>, key: String) -> Result<impl Reply, Rej
 }
 
 async fn put_key(
-    store: Arc<MemoryStore>,
+    store: Arc<impl Store>,
     event_tx: Arc<broadcast::Sender<SseMessage>>,
     config: Arc<RwLock<Configuration>>,
     key: String,
@@ -250,7 +248,7 @@ async fn put_key(
     }
 }
 
-async fn delete_key(store: Arc<MemoryStore>, key: String) -> Result<impl Reply, Rejection> {
+async fn delete_key(store: Arc<impl Store>, key: String) -> Result<impl Reply, Rejection> {
     if let Some(_) = store.get(key.clone()).await {
         (*store).delete(key).await;
         Ok(warp::reply::json(&JsonMessage {
@@ -261,7 +259,7 @@ async fn delete_key(store: Arc<MemoryStore>, key: String) -> Result<impl Reply, 
     }
 }
 
-async fn find_key(store: Arc<MemoryStore>, key: String) -> Result<impl Reply, Rejection> {
+async fn find_key(store: Arc<impl Store>, key: String) -> Result<impl Reply, Rejection> {
     if let Some(value) = store.get(key).await {
         Ok(Response::builder()
             .header("Content-Type", value.mime_type)
@@ -276,7 +274,7 @@ struct PatchValue {
     operation: String,
 }
 async fn patch_key(
-    store: Arc<MemoryStore>,
+    store: Arc<impl Store>,
     key: String,
     patch_value: PatchValue,
 ) -> Result<impl Reply, Rejection> {
