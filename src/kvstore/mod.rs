@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use block_modes::{block_padding::ZeroPadding, BlockMode, Cbc};
 use chrono::{DateTime, Utc};
 use serpent::Serpent;
@@ -5,6 +6,15 @@ use serpent::Serpent;
 mod memory;
 
 pub use memory::MemoryStore;
+
+#[async_trait]
+pub trait Store {
+    async fn get(&self, key: String) -> Option<KvElement>;
+    async fn set(&self, key: String, mut value: Vec<u8>) -> Option<KvElement>;
+    async fn delete(&self, key: String);
+    async fn set_lock(&self, key: String, lock: bool) -> bool;
+    async fn add(&self, key: String, addend: f64) -> bool;
+}
 
 #[derive(Debug, Clone)]
 pub struct KvElement {

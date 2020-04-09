@@ -46,6 +46,7 @@ tokio = { version = "0.2.9", features = ["full", "sync"] }
 serpent = { git = "https://github.com/RustCrypto/block-ciphers" }
 block-modes = "0.3.3"
 hyper = "0.13.4"
+async-trait = "0.1.30"
 
 [dev-dependencies]
 criterion = "0.3"

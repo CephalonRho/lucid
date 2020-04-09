@@ -16,7 +16,7 @@ use warp::{
 use warp::{sse::ServerSentEvent, Filter};
 
 use crate::configuration::{Claims, Configuration};
-use crate::kvstore::{Encryption, MemoryStore};
+use crate::kvstore::{Encryption, MemoryStore, Store};
 
 #[derive(Debug, Clone)]
 pub struct SseMessage {
@@ -53,10 +53,8 @@ impl Server {
             None
         };
 
-        let store = Arc::new(MemoryStore::new(encryption_key));
-        let event_tx = Arc::new(broadcast::channel(512).0);
-
         let store = Arc::new(MemoryStore::new(encryption));
+        let event_tx = Arc::new(broadcast::channel(512).0);
 
         let instance = warp::serve(routes_filter(store, event_tx, self.configuration.clone()));
         if configuration.general.use_ssl {
@@ -210,7 +208,7 @@ pub fn routes_filter(
 }
 
 async fn get_key(store: Arc<MemoryStore>, key: String) -> Result<impl Reply, Rejection> {
-    if let Some(value) = store.get(key) {
+    if let Some(value) = store.get(key).await {
         Ok(Response::builder()
             .header("Content-Type", value.mime_type)
             .body(value.data))
@@ -240,7 +238,7 @@ async fn put_key(
                 value: byte_to_string,
             });
         }
-        if let Some(_) = store.set(key, body.to_vec()) {
+        if let Some(_) = store.set(key, body.to_vec()).await {
             Ok(warp::reply::json(&JsonMessage {
                 message: "The specified key was successfully updated.".to_string(),
             }))
@@ -253,8 +251,8 @@ async fn put_key(
 }
 
 async fn delete_key(store: Arc<MemoryStore>, key: String) -> Result<impl Reply, Rejection> {
-    if let Some(_) = store.get(key.clone()) {
-        (*store).drop(key);
+    if let Some(_) = store.get(key.clone()).await {
+        (*store).delete(key).await;
         Ok(warp::reply::json(&JsonMessage {
             message: "The specified key and it's data was successfully deleted".to_string(),
         }))
@@ -264,7 +262,7 @@ async fn delete_key(store: Arc<MemoryStore>, key: String) -> Result<impl Reply, 
 }
 
 async fn find_key(store: Arc<MemoryStore>, key: String) -> Result<impl Reply, Rejection> {
-    if let Some(value) = store.get(key) {
+    if let Some(value) = store.get(key).await {
         Ok(Response::builder()
             .header("Content-Type", value.mime_type)
             .body(value.data))
@@ -282,28 +280,28 @@ async fn patch_key(
     key: String,
     patch_value: PatchValue,
 ) -> Result<impl Reply, Rejection> {
-    if let Some(_) = store.get(key.clone()) {
+    if let Some(_) = store.get(key.clone()).await {
         match patch_value.operation.to_lowercase().as_str() {
             "lock" => {
-                store.switch_lock(key.to_string(), true);
+                store.set_lock(key.to_string(), true).await;
                 Ok(warp::reply::json(&JsonMessage {
                     message: "The specified key was successfully locked.".to_string(),
                 }))
             }
             "unlock" => {
-                store.switch_lock(key.to_string(), false);
+                store.set_lock(key.to_string(), false).await;
                 Ok(warp::reply::json(&JsonMessage {
                     message: "The specified key was successfully unlocked.".to_string(),
                 }))
             }
             "increment" => {
-                store.increment_or_decrement(key.to_string(), 1.0);
+                store.add(key.to_string(), 1.0).await;
                 Ok(warp::reply::json(&JsonMessage {
                     message: "The specified key was successfully incremented.".to_string(),
                 }))
             }
             "decrement" => {
-                store.increment_or_decrement(key.to_string(), -1.0);
+                store.add(key.to_string(), -1.0).await;
                 Ok(warp::reply::json(&JsonMessage {
                     message: "The specified key was successfully decremented.".to_string(),
                 }))

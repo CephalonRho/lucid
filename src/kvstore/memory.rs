@@ -1,7 +1,8 @@
+use async_trait::async_trait;
 use chashmap::CHashMap;
 use chrono::Utc;
 
-use super::{Encryption, KvElement};
+use super::{Encryption, KvElement, Store};
 
 pub struct MemoryStore {
     container: CHashMap<String, KvElement>,
@@ -15,8 +16,11 @@ impl MemoryStore {
             encryption,
         }
     }
+}
 
-    pub fn set(&self, key: String, mut value: Vec<u8>) -> Option<KvElement> {
+#[async_trait]
+impl Store for MemoryStore {
+    async fn set(&self, key: String, mut value: Vec<u8>) -> Option<KvElement> {
         let iv = if let Some(encryption) = &self.encryption {
             let iv = rand::random::<[u8; 16]>();
             value = encryption.encrypt_vec(&value, &iv).unwrap();
@@ -52,7 +56,7 @@ impl MemoryStore {
         }
     }
 
-    pub fn get(&self, key: String) -> Option<KvElement> {
+    async fn get(&self, key: String) -> Option<KvElement> {
         match self.container.get(&key) {
             Some(value) => {
                 let mut cloned_value = value.clone();
@@ -70,23 +74,27 @@ impl MemoryStore {
         }
     }
 
-    pub fn switch_lock(&self, key: String, to_lock: bool) -> bool {
+    async fn delete(&self, key: String) {
+        self.container.remove(&key);
+    }
+
+    async fn set_lock(&self, key: String, lock: bool) -> bool {
         match &mut self.container.get_mut(&key) {
             Some(kv_element) => {
-                kv_element.locked = to_lock;
+                kv_element.locked = lock;
                 true
             }
             None => false,
         }
     }
 
-    pub fn increment_or_decrement(&self, key: String, value: f64) -> bool {
+    async fn add(&self, key: String, addend: f64) -> bool {
         match &mut self.container.get_mut(&key) {
             Some(kv_element) => {
                 let byte_to_string = String::from_utf8(kv_element.clone().data).unwrap(); // TODO: handle convert to string error
                 match byte_to_string.trim().parse::<f64>() {
                     Ok(initial_value) => {
-                        kv_element.data = (initial_value + value).to_string().into_bytes();
+                        kv_element.data = (initial_value + addend).to_string().into_bytes();
                         kv_element.updated_at = Utc::now();
                         kv_element.update_count = kv_element.update_count + 1;
                         true
@@ -96,11 +104,5 @@ impl MemoryStore {
             }
             None => false,
         }
-    }
-
-    // TODO: implement Lock, Unlock, Increment, Decrement, Expire
-
-    pub fn drop(&self, key: String) {
-        self.container.remove(&key);
     }
 }
